@@ -135,24 +135,28 @@
       letter-spacing: 0.06em;
     }
 
-    .graph {
+    .graph-widget {
       width: 100%;
-      height: 180px;
-      display: block;
+      height: clamp(300px, 46vh, 460px);
       border: 1px dashed rgba(255, 176, 77, 0.45);
       background: rgba(14, 8, 5, 0.7);
+      overflow: hidden;
+      position: relative;
     }
 
-    .graph-meta {
+    .graph-widget > div,
+    .graph-widget iframe {
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    .graph-footnote {
       margin-top: 8px;
       color: var(--muted);
       font-size: 0.78rem;
       letter-spacing: 0.02em;
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-      flex-wrap: wrap;
     }
+
     .meta {
       margin-top: 18px;
       color: var(--muted);
@@ -274,6 +278,10 @@
         inset: 7px;
       }
 
+      .graph-widget {
+        height: 300px;
+      }
+
       .note {
         font-size: 0.8rem;
       }
@@ -297,16 +305,10 @@
 
         <p id="price" class="price">—</p>
 
-        <section class="graph-wrap" aria-label="Price graph">
-          <p class="graph-title">Price history (session)</p>
-          <svg id="priceGraph" class="graph" viewBox="0 0 800 180" preserveAspectRatio="none" role="img" aria-label="Bitcoin price trend chart">
-            <polyline id="graphLine" fill="none" stroke="#ff9c2f" stroke-width="3" points="" stroke-linecap="round" stroke-linejoin="round"></polyline>
-          </svg>
-          <div class="graph-meta">
-            <span id="graphMin">Min: —</span>
-            <span id="graphMax">Max: —</span>
-            <span id="graphCount">Points: 0</span>
-          </div>
+        <section class="graph-wrap" aria-label="Daily price chart">
+          <p class="graph-title">24H chart (TradingView)</p>
+          <div id="tvChart" class="graph-widget" role="img" aria-label="Bitcoin daily TradingView chart"></div>
+          <p class="graph-footnote">Chart source: TradingView (24-hour range).</p>
         </section>
 
         <div class="meta">
@@ -331,10 +333,6 @@
       const updatedEl = document.getElementById('updated');
       const statusEl = document.getElementById('status');
       const refreshBtn = document.getElementById('refreshBtn');
-      const graphLine = document.getElementById('graphLine');
-      const graphMin = document.getElementById('graphMin');
-      const graphMax = document.getElementById('graphMax');
-      const graphCount = document.getElementById('graphCount');
 
       const NORMAL_REFRESH_MS = 30_000;
       const BASE_BACKOFF_MS = 5_000;
@@ -344,8 +342,6 @@
       let timerId = null;
       let isUpdating = false;
       let lastKnownPrice = null;
-      const priceHistory = [];
-      const MAX_POINTS = 40;
 
       function setStatus(text, type) {
         statusEl.textContent = text;
@@ -365,32 +361,6 @@
           dateStyle: 'medium',
           timeStyle: 'medium'
         }).format(date);
-      }
-
-      function updateGraph() {
-        if (!priceHistory.length) {
-          graphLine.setAttribute('points', '');
-          graphMin.textContent = 'Min: —';
-          graphMax.textContent = 'Max: —';
-          graphCount.textContent = 'Points: 0';
-          return;
-        }
-
-        const values = priceHistory.map((entry) => entry.value);
-        const min = Math.min(...values);
-        const max = Math.max(...values);
-        const range = max - min || 1;
-
-        const points = values.map((value, i) => {
-          const x = (i / Math.max(1, values.length - 1)) * 800;
-          const y = 170 - ((value - min) / range) * 160;
-          return x.toFixed(2) + ',' + y.toFixed(2);
-        }).join(' ');
-
-        graphLine.setAttribute('points', points);
-        graphMin.textContent = 'Min: ' + formatUSD(min);
-        graphMax.textContent = 'Max: ' + formatUSD(max);
-        graphCount.textContent = 'Points: ' + values.length;
       }
 
       async function fetchFromCoinbase() {
@@ -462,12 +432,6 @@
           sourceEl.textContent = result.source;
           updateTimestamp(new Date());
 
-          priceHistory.push({ value: result.amount, ts: Date.now() });
-          if (priceHistory.length > MAX_POINTS) {
-            priceHistory.shift();
-          }
-          updateGraph();
-
           retryCount = 0;
           setStatus('Live', 'live');
           scheduleNext(NORMAL_REFRESH_MS);
@@ -485,11 +449,63 @@
         }
       }
 
+
+      function initTradingViewChart() {
+        const existing = document.getElementById('tradingview-widget-script');
+        if (existing) {
+          return;
+        }
+
+        const script = document.createElement('script');
+        script.id = 'tradingview-widget-script';
+        script.src = 'https://s3.tradingview.com/tv.js';
+        script.async = true;
+        script.onload = function () {
+          if (window.TradingView && typeof window.TradingView.widget === 'function') {
+            new window.TradingView.widget({
+              container_id: 'tvChart',
+              autosize: true,
+              symbol: 'COINBASE:BTCUSD',
+              interval: '15',
+              timezone: 'Etc/UTC',
+              theme: 'dark',
+              style: '1',
+              locale: 'en',
+              toolbar_bg: '#1f130c',
+              enable_publishing: false,
+              hide_top_toolbar: false,
+              hide_legend: false,
+              allow_symbol_change: false,
+              withdateranges: false,
+              details: false,
+              hotlist: false,
+              calendar: false,
+              range: '1D',
+              hide_volume: false,
+              save_image: false,
+              studies: []
+            });
+          }
+        };
+        script.onerror = function () {
+          const chart = document.getElementById('tvChart');
+          if (chart) {
+            chart.textContent = 'Unable to load TradingView chart right now.';
+            chart.style.display = 'grid';
+            chart.style.placeItems = 'center';
+            chart.style.color = '#f4b36b';
+            chart.style.padding = '12px';
+          }
+        };
+        document.head.appendChild(script);
+      }
+
       refreshBtn.addEventListener('click', () => {
         clearTimeout(timerId);
         refreshPrice();
       });
 
+      initTradingViewChart();
       refreshPrice();
     })();
   </script>
