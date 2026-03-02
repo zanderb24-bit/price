@@ -45,7 +45,7 @@
     }
 
     .container {
-      width: min(740px, 100%);
+      width: min(860px, 100%);
       position: relative;
       padding-left: 54px;
     }
@@ -78,7 +78,7 @@
       border: 3px solid var(--border);
       border-radius: 0;
       box-shadow: var(--shadow);
-      padding: 28px;
+      padding: 32px;
       position: relative;
     }
 
@@ -109,7 +109,7 @@
 
     .price {
       margin: 0;
-      font-size: clamp(2rem, 6.6vw, 3.7rem);
+      font-size: clamp(2rem, 6vw, 3.9rem);
       line-height: 1.06;
       font-weight: 800;
       letter-spacing: 0.01em;
@@ -118,6 +118,41 @@
       text-shadow: 0 0 10px rgba(255, 138, 0, 0.35);
     }
 
+
+    .graph-wrap {
+      margin-top: 18px;
+      padding: 14px;
+      border: 2px solid rgba(255, 138, 0, 0.55);
+      background: linear-gradient(180deg, rgba(34, 20, 11, 0.9) 0%, rgba(22, 13, 8, 0.95) 100%);
+      box-shadow: inset 0 0 0 1px rgba(255, 176, 77, 0.28);
+    }
+
+    .graph-title {
+      margin: 0 0 8px;
+      color: var(--accent-soft);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .graph {
+      width: 100%;
+      height: 180px;
+      display: block;
+      border: 1px dashed rgba(255, 176, 77, 0.45);
+      background: rgba(14, 8, 5, 0.7);
+    }
+
+    .graph-meta {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      letter-spacing: 0.02em;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
     .meta {
       margin-top: 18px;
       color: var(--muted);
@@ -262,6 +297,18 @@
 
         <p id="price" class="price">—</p>
 
+        <section class="graph-wrap" aria-label="Price graph">
+          <p class="graph-title">Price history (session)</p>
+          <svg id="priceGraph" class="graph" viewBox="0 0 800 180" preserveAspectRatio="none" role="img" aria-label="Bitcoin price trend chart">
+            <polyline id="graphLine" fill="none" stroke="#ff9c2f" stroke-width="3" points="" stroke-linecap="round" stroke-linejoin="round"></polyline>
+          </svg>
+          <div class="graph-meta">
+            <span id="graphMin">Min: —</span>
+            <span id="graphMax">Max: —</span>
+            <span id="graphCount">Points: 0</span>
+          </div>
+        </section>
+
         <div class="meta">
           <div><span class="label">Source:</span> <span id="source">—</span></div>
           <div><span class="label">Last updated:</span> <span id="updated">—</span></div>
@@ -284,6 +331,10 @@
       const updatedEl = document.getElementById('updated');
       const statusEl = document.getElementById('status');
       const refreshBtn = document.getElementById('refreshBtn');
+      const graphLine = document.getElementById('graphLine');
+      const graphMin = document.getElementById('graphMin');
+      const graphMax = document.getElementById('graphMax');
+      const graphCount = document.getElementById('graphCount');
 
       const NORMAL_REFRESH_MS = 30_000;
       const BASE_BACKOFF_MS = 5_000;
@@ -293,6 +344,8 @@
       let timerId = null;
       let isUpdating = false;
       let lastKnownPrice = null;
+      const priceHistory = [];
+      const MAX_POINTS = 40;
 
       function setStatus(text, type) {
         statusEl.textContent = text;
@@ -312,6 +365,32 @@
           dateStyle: 'medium',
           timeStyle: 'medium'
         }).format(date);
+      }
+
+      function updateGraph() {
+        if (!priceHistory.length) {
+          graphLine.setAttribute('points', '');
+          graphMin.textContent = 'Min: —';
+          graphMax.textContent = 'Max: —';
+          graphCount.textContent = 'Points: 0';
+          return;
+        }
+
+        const values = priceHistory.map((entry) => entry.value);
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const range = max - min || 1;
+
+        const points = values.map((value, i) => {
+          const x = (i / Math.max(1, values.length - 1)) * 800;
+          const y = 170 - ((value - min) / range) * 160;
+          return x.toFixed(2) + ',' + y.toFixed(2);
+        }).join(' ');
+
+        graphLine.setAttribute('points', points);
+        graphMin.textContent = 'Min: ' + formatUSD(min);
+        graphMax.textContent = 'Max: ' + formatUSD(max);
+        graphCount.textContent = 'Points: ' + values.length;
       }
 
       async function fetchFromCoinbase() {
@@ -382,6 +461,12 @@
           priceEl.textContent = formatUSD(result.amount);
           sourceEl.textContent = result.source;
           updateTimestamp(new Date());
+
+          priceHistory.push({ value: result.amount, ts: Date.now() });
+          if (priceHistory.length > MAX_POINTS) {
+            priceHistory.shift();
+          }
+          updateGraph();
 
           retryCount = 0;
           setStatus('Live', 'live');
