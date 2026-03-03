@@ -1,1 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Market Tracker</title>
+  <style>
+    :root {
+      --bg: #140c08;
+      --bg-scan: rgba(255, 132, 0, 0.05);
+      --card-a: #2f1c11;
+      --card-b: #1e120c;
+      --text: #ffe7c5;
+      --muted: #efb16f;
+      --accent: #ff8f1f;
+      --accent-soft: #ffc578;
+      --ok: #ffd58b;
+      --warn: #ffad4c;
+      --error: #ff7a66;
+      --border: #ff8f1f;
+      --shadow: 0 0 0 2px #6f3c15, 0 20px 44px rgba(0, 0, 0, 0.46);
+    }
 
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Courier New", Monaco, "Lucida Console", monospace;
+      color: var(--text);
+      background:
+        repeating-linear-gradient(180deg, var(--bg-scan) 0, var(--bg-scan) 1px, transparent 1px, transparent 4px),
+        radial-gradient(circle at 18% 12%, #3f2615 0%, #23150c 35%, var(--bg) 76%);
+      display: grid;
+      place-items: center;
+    }
+
+    .layout {
+      width: 100vw;
+      min-height: 100vh;
+      padding-left: 76px;
+      position: relative;
+    }
+
+    .panel-wrap {
+      min-height: 100vh;
+      position: relative;
+    }
+
+    .tabs {
+      position: absolute;
+      top: 28px;
+      left: -56px;
+      display: grid;
+      gap: 10px;
+      z-index: 2;
+    }
+
+    .tab {
+      width: 76px;
+      min-height: 44px;
+      border: 5px solid var(--border);
+      border-right: 0;
+      border-radius: 7px 0 0 7px;
+      background: linear-gradient(180deg, #3f2617 0%, #2b190f 100%);
+      color: var(--muted);
+      box-shadow: 0 0 0 2px #703d16;
+      text-align: center;
+      padding: 6px 4px;
+      font: inherit;
+      font-size: 0.7rem;
+      cursor: pointer;
+    }
+
+    .tab.active {
+      background: linear-gradient(180deg, #5d371b 0%, #412512 100%);
+      color: var(--accent-soft);
+      text-shadow: 0 0 8px rgba(255, 143, 31, 0.35);
+    }
+
+    .panel {
+      min-height: 100vh;
+      padding: 42px;
+      border: 5px solid var(--border);
+      background: linear-gradient(180deg, var(--card-a) 0%, var(--card-b) 100%);
+      box-shadow: var(--shadow);
+      position: relative;
+    }
+
+    .panel::after {
+      content: "";
+      position: absolute;
+      inset: 10px;
+      border: 1px dashed rgba(255, 177, 86, 0.38);
+      pointer-events: none;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      color: var(--accent-soft);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: clamp(1.1rem, 2.3vw, 1.5rem);
+    }
+
+    .subtitle {
+      margin: 0 0 20px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .price {
+      margin: 0;
+      color: var(--accent);
+      text-shadow: 0 0 12px rgba(255, 143, 31, 0.32);
+      font-size: clamp(2.4rem, 8vw, 6rem);
+      line-height: 1.05;
+      font-weight: 800;
+      word-break: break-word;
+    }
+
+    .chart-shell {
+      margin-top: 18px;
+      padding: 14px;
+      border: 2px solid rgba(255, 143, 31, 0.4);
+      background: linear-gradient(180deg, rgba(44, 27, 15, 0.92) 0%, rgba(32, 19, 12, 0.96) 60%, rgba(28, 18, 12, 0.98) 100%);
+      box-shadow: inset 0 0 0 1px rgba(255, 177, 86, 0.16);
+    }
+
+    .chart-title {
+      margin: 0 0 8px;
+      color: var(--accent-soft);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-size: 0.8rem;
+    }
+
+    .chart {
+      width: 100%;
+      height: clamp(420px, 58vh, 760px);
+      border: 1px dashed rgba(255, 177, 86, 0.26);
+      background: radial-gradient(circle at top, rgba(62, 38, 22, 0.5) 0%, rgba(33, 20, 12, 0.94) 72%);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .chart > div,
+    .chart iframe { width: 100% !important; height: 100% !important; }
+
+    .chart-note {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+
+    .meta {
+      margin-top: 18px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 143, 31, 0.42);
+      display: grid;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.93rem;
+    }
+
+    .label {
+      color: var(--accent-soft);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.82em;
+    }
+
+    .status { font-weight: 700; }
+    .status.live { color: var(--ok); }
+    .status.updating { color: var(--warn); }
+    .status.error { color: var(--error); }
+
+    .note {
+      margin-top: 20px;
+      color: var(--muted);
+      border-left: 3px solid rgba(255, 143, 31, 0.52);
+      padding-left: 10px;
+      font-size: 0.84rem;
+    }
+
+    @media (max-width: 720px) {
+      .layout { padding-left: 60px; }
+      .tabs { left: -60px; }
+      .tab { width: 60px; font-size: 0.62rem; min-height: 38px; }
+    }
+
+    @media (max-width: 480px) {
+      .layout { padding-left: 46px; }
+      .tabs { left: -46px; }
+      .tab { width: 46px; min-height: 30px; font-size: 0.55rem; padding: 4px 2px; }
+      .panel { padding: 24px; }
+      .panel::after { inset: 7px; }
+      .chart { height: 360px; }
+      .note { font-size: 0.8rem; }
+    }
+  </style>
+</head>
+<body>
+  <main class="layout">
+    <div class="panel-wrap">
+      <aside class="tabs" aria-label="Market tabs">
+        <button id="tabBtc" class="tab active" type="button">BTC</button>
+        <button id="tabFx" class="tab" type="button">USD/GBP</button>
+        <button class="tab" type="button" aria-hidden="true"></button>
+        <button class="tab" type="button" aria-hidden="true"></button>
+      </aside>
+
+      <section class="panel" aria-live="polite">
+        <h1 id="title">Bitcoin (BTC) Price</h1>
+        <p id="subtitle" class="subtitle">Real-time spot price in USD</p>
+
+        <p id="price" class="price">—</p>
+
+        <section class="chart-shell" aria-label="Price chart">
+          <p id="chartTitle" class="chart-title">BTC 24H chart (TradingView)</p>
+          <div id="tvChart" class="chart" role="img" aria-label="Market chart"></div>
+          <p id="chartNote" class="chart-note">Chart source: TradingView (COINBASE:BTCUSD, 24-hour range).</p>
+        </section>
+
+        <div class="meta">
+          <div><span class="label">Source:</span> <span id="source">—</span></div>
+          <div><span class="label">Last updated:</span> <span id="updated">—</span></div>
+          <div><span class="label">Status:</span> <span id="status" class="status updating">Waiting for first update…</span></div>
+        </div>
+
+        <p class="note">Auto-refresh every 30 seconds. On errors, retries use exponential backoff.</p>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      const el = {
+        title: document.getElementById('title'),
+        subtitle: document.getElementById('subtitle'),
+        price: document.getElementById('price'),
+        source: document.getElementById('source'),
+        updated: document.getElementById('updated'),
+        status: document.getElementById('status'),
+        chartTitle: document.getElementById('chartTitle'),
+        chartNote: document.getElementById('chartNote'),
+        chart: document.getElementById('tvChart'),
+        tabBtc: document.getElementById('tabBtc'),
+        tabFx: document.getElementById('tabFx')
+      };
+
+      const REFRESH_MS = 30000;
+      const BACKOFF_BASE = 5000;
+      const BACKOFF_MAX = 60000;
+
+      const views = {
+        btc: {
+          title: 'Bitcoin (BTC) Price',
+          subtitle: 'Real-time spot price in USD',
+          chartTitle: 'BTC 24H chart (TradingView)',
+          chartNote: 'Chart source: TradingView (COINBASE:BTCUSD, 24-hour range).',
+          tvSymbol: 'COINBASE:BTCUSD',
+          format: (n) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n)
+        },
+        fx: {
+          title: 'USD/GBP Exchange Rate',
+          subtitle: 'US Dollar to British Pound (live rate)',
+          chartTitle: 'USD/GBP 24H chart (TradingView)',
+          chartNote: 'Chart source: TradingView (FX_IDC:USDGBP, 24-hour range).',
+          tvSymbol: 'FX_IDC:USDGBP',
+          format: (n) => new Intl.NumberFormat(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(n) + ' GBP'
+        }
+      };
+
+      let activeView = 'btc';
+      let retries = 0;
+      let inFlight = false;
+      let timer = null;
+      let tvReady = false;
+      const lastKnown = { btc: null, fx: null };
+
+      function setStatus(text, kind) {
+        el.status.textContent = text;
+        el.status.className = 'status ' + kind;
+      }
+
+      function stampNow() {
+        el.updated.textContent = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' }).format(new Date());
+      }
+
+      function schedule(ms) {
+        clearTimeout(timer);
+        timer = setTimeout(refresh, ms);
+      }
+
+      function backoff() {
+        return Math.min(BACKOFF_BASE * Math.pow(2, Math.max(0, retries - 1)), BACKOFF_MAX);
+      }
+
+      function paintView() {
+        const v = views[activeView];
+        el.title.textContent = v.title;
+        el.subtitle.textContent = v.subtitle;
+        el.chartTitle.textContent = v.chartTitle;
+        el.chartNote.textContent = v.chartNote;
+        el.tabBtc.classList.toggle('active', activeView === 'btc');
+        el.tabFx.classList.toggle('active', activeView === 'fx');
+        el.price.textContent = lastKnown[activeView] == null ? '—' : v.format(lastKnown[activeView]);
+      }
+
+      async function fetchBtc() {
+        try {
+          const r = await fetch('https://api.coinbase.com/v2/prices/BTC-USD/spot', { cache: 'no-store' });
+          if (!r.ok) throw new Error('Coinbase HTTP ' + r.status);
+          const j = await r.json();
+          const amount = Number(j && j.data && j.data.amount);
+          if (!Number.isFinite(amount)) throw new Error('Coinbase returned invalid price data');
+          return { amount, source: 'Coinbase' };
+        } catch (e1) {
+          const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd', { cache: 'no-store' });
+          if (!r.ok) throw new Error(e1.message + '; fallback failed: CoinGecko HTTP ' + r.status);
+          const j = await r.json();
+          const amount = Number(j && j.bitcoin && j.bitcoin.usd);
+          if (!Number.isFinite(amount)) throw new Error(e1.message + '; fallback failed: CoinGecko returned invalid price data');
+          return { amount, source: 'CoinGecko' };
+        }
+      }
+
+      async function fetchFx() {
+        try {
+          const r = await fetch('https://api.frankfurter.app/latest?from=USD&to=GBP', { cache: 'no-store' });
+          if (!r.ok) throw new Error('Frankfurter HTTP ' + r.status);
+          const j = await r.json();
+          const amount = Number(j && j.rates && j.rates.GBP);
+          if (!Number.isFinite(amount)) throw new Error('Frankfurter returned invalid rate data');
+          return { amount, source: 'Frankfurter' };
+        } catch (e1) {
+          const r = await fetch('https://open.er-api.com/v6/latest/USD', { cache: 'no-store' });
+          if (!r.ok) throw new Error(e1.message + '; fallback failed: ER-API HTTP ' + r.status);
+          const j = await r.json();
+          const amount = Number(j && j.rates && j.rates.GBP);
+          if (!Number.isFinite(amount)) throw new Error(e1.message + '; fallback failed: ER-API returned invalid rate data');
+          return { amount, source: 'ER-API' };
+        }
+      }
+
+      async function refresh() {
+        if (inFlight) return;
+        inFlight = true;
+        setStatus('Updating…', 'updating');
+        try {
+          const result = activeView === 'btc' ? await fetchBtc() : await fetchFx();
+          lastKnown[activeView] = result.amount;
+          el.price.textContent = views[activeView].format(result.amount);
+          el.source.textContent = result.source;
+          stampNow();
+          retries = 0;
+          setStatus('Live', 'live');
+          schedule(REFRESH_MS);
+        } catch (err) {
+          retries += 1;
+          if (lastKnown[activeView] != null) {
+            el.price.textContent = views[activeView].format(lastKnown[activeView]);
+          }
+          const wait = backoff();
+          setStatus('Error: ' + err.message + '. Retrying in ' + Math.round(wait / 1000) + 's', 'error');
+          schedule(wait);
+        } finally {
+          inFlight = false;
+        }
+      }
+
+      function renderTV() {
+        if (!tvReady || !window.TradingView || typeof window.TradingView.widget !== 'function') return;
+        el.chart.innerHTML = '';
+        new window.TradingView.widget({
+          container_id: 'tvChart',
+          autosize: true,
+          symbol: views[activeView].tvSymbol,
+          interval: '15',
+          range: '1D',
+          timezone: 'Etc/UTC',
+          theme: 'dark',
+          style: '1',
+          locale: 'en',
+          toolbar_bg: '#1f130c',
+          enable_publishing: false,
+          hide_top_toolbar: false,
+          hide_legend: false,
+          allow_symbol_change: false,
+          withdateranges: false,
+          details: false,
+          hotlist: false,
+          calendar: false,
+          hide_volume: false,
+          save_image: false,
+          studies: []
+        });
+      }
+
+      function initTV() {
+        const existing = document.getElementById('tradingview-widget-script');
+        if (existing) {
+          if (window.TradingView) {
+            tvReady = true;
+            renderTV();
+          }
+          return;
+        }
+        const script = document.createElement('script');
+        script.id = 'tradingview-widget-script';
+        script.src = 'https://s3.tradingview.com/tv.js';
+        script.async = true;
+        script.onload = () => { tvReady = true; renderTV(); };
+        script.onerror = () => {
+          el.chart.textContent = 'Unable to load TradingView chart right now.';
+          el.chart.style.display = 'grid';
+          el.chart.style.placeItems = 'center';
+          el.chart.style.color = '#f4b36b';
+          el.chart.style.padding = '12px';
+        };
+        document.head.appendChild(script);
+      }
+
+      function switchView(next) {
+        if (next === activeView) return;
+        activeView = next;
+        retries = 0;
+        clearTimeout(timer);
+        paintView();
+        renderTV();
+        refresh();
+      }
+
+      el.tabBtc.addEventListener('click', () => switchView('btc'));
+      el.tabFx.addEventListener('click', () => switchView('fx'));
+
+      paintView();
+      initTV();
+      refresh();
+    })();
+  </script>
+</body>
+</html>
