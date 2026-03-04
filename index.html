@@ -1,1 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BTC Dashboard</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #111830;
+      --panel-2: #0e1428;
+      --text: #ecf2ff;
+      --muted: #9fb1d9;
+      --accent: #f7931a;
+      --up: #22c55e;
+      --down: #ef4444;
+      --border: #233256;
+    }
 
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at top right, #162447 0%, var(--bg) 60%);
+    }
+
+    .card {
+      width: min(980px, 100%);
+      background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: clamp(18px, 2.5vw, 28px);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.2rem, 2.4vw, 1.7rem);
+    }
+
+    .sub {
+      margin: 6px 0 18px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: end;
+      margin-bottom: 16px;
+    }
+
+    .price {
+      margin: 0;
+      font-size: clamp(2.1rem, 6vw, 3.8rem);
+      line-height: 1.05;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .change {
+      margin: 0;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.03);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .change.up { color: var(--up); }
+    .change.down { color: var(--down); }
+
+    .chart-wrap {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px;
+      background: rgba(5, 10, 24, 0.5);
+    }
+
+    #chart {
+      width: 100%;
+      height: clamp(250px, 45vh, 420px);
+      display: block;
+    }
+
+    .meta {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 0.9rem;
+      display: grid;
+      gap: 8px;
+    }
+
+    .status.ok { color: var(--up); }
+    .status.err { color: var(--down); }
+
+    @media (max-width: 640px) {
+      .stats { grid-template-columns: 1fr; }
+      .change { justify-self: start; }
+    }
+  </style>
+</head>
+<body>
+  <main class="card" aria-live="polite">
+    <h1>Bitcoin (BTC) Dashboard</h1>
+    <p class="sub">Live USD price, 24h percentage change, and 24h line chart</p>
+
+    <section class="stats">
+      <p id="price" class="price">—</p>
+      <p id="change" class="change">24h: —</p>
+    </section>
+
+    <section class="chart-wrap">
+      <canvas id="chart" role="img" aria-label="BTC 24 hour line chart"></canvas>
+    </section>
+
+    <section class="meta">
+      <div>Last updated: <span id="updated">—</span></div>
+      <div>Status: <span id="status" class="status">Loading…</span></div>
+      <div>Source: CoinGecko API</div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    (() => {
+      const priceEl = document.getElementById('price');
+      const changeEl = document.getElementById('change');
+      const updatedEl = document.getElementById('updated');
+      const statusEl = document.getElementById('status');
+      const canvas = document.getElementById('chart');
+      const REFRESH_MS = 30000;
+
+      let chart;
+      let timer;
+
+      function setStatus(text, cls = '') {
+        statusEl.textContent = text;
+        statusEl.className = 'status ' + cls;
+      }
+
+      function formatUsd(value) {
+        return new Intl.NumberFormat(undefined, {
+          style: 'currency',
+          currency: 'USD',
+          maximumFractionDigits: 2
+        }).format(value);
+      }
+
+      function formatPercent(value) {
+        const sign = value >= 0 ? '+' : '';
+        return sign + value.toFixed(2) + '%';
+      }
+
+      async function fetchBtcData() {
+        const [priceRes, chartRes] = await Promise.all([
+          fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true', { cache: 'no-store' }),
+          fetch('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=1&interval=hourly', { cache: 'no-store' })
+        ]);
+
+        if (!priceRes.ok) throw new Error('Price API HTTP ' + priceRes.status);
+        if (!chartRes.ok) throw new Error('Chart API HTTP ' + chartRes.status);
+
+        const priceJson = await priceRes.json();
+        const chartJson = await chartRes.json();
+
+        const price = Number(priceJson?.bitcoin?.usd);
+        const change24h = Number(priceJson?.bitcoin?.usd_24h_change);
+        const series = Array.isArray(chartJson?.prices) ? chartJson.prices : [];
+
+        if (!Number.isFinite(price) || !Number.isFinite(change24h) || !series.length) {
+          throw new Error('Invalid API data');
+        }
+
+        return { price, change24h, series };
+      }
+
+      function renderChart(series) {
+        const labels = series.map(([ts]) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        const values = series.map(([, val]) => val);
+
+        if (chart) chart.destroy();
+
+        chart = new Chart(canvas.getContext('2d'), {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [{
+              data: values,
+              borderColor: '#f7931a',
+              borderWidth: 2.5,
+              pointRadius: 0,
+              tension: 0.24,
+              fill: true,
+              backgroundColor: 'rgba(247,147,26,0.14)'
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: (ctx) => formatUsd(ctx.raw)
+                }
+              }
+            },
+            scales: {
+              x: {
+                ticks: { color: '#9fb1d9', maxTicksLimit: 8 },
+                grid: { color: 'rgba(159,177,217,0.12)' }
+              },
+              y: {
+                ticks: {
+                  color: '#9fb1d9',
+                  callback: (v) => formatUsd(v)
+                },
+                grid: { color: 'rgba(159,177,217,0.12)' }
+              }
+            }
+          }
+        });
+      }
+
+      async function refresh() {
+        setStatus('Updating…');
+        try {
+          const data = await fetchBtcData();
+          priceEl.textContent = formatUsd(data.price);
+
+          changeEl.textContent = '24h: ' + formatPercent(data.change24h);
+          changeEl.className = 'change ' + (data.change24h >= 0 ? 'up' : 'down');
+
+          renderChart(data.series);
+
+          updatedEl.textContent = new Intl.DateTimeFormat(undefined, {
+            dateStyle: 'medium',
+            timeStyle: 'medium'
+          }).format(new Date());
+
+          setStatus('Live', 'ok');
+        } catch (err) {
+          setStatus('Error: ' + err.message, 'err');
+        } finally {
+          clearTimeout(timer);
+          timer = setTimeout(refresh, REFRESH_MS);
+        }
+      }
+
+      refresh();
+    })();
+  </script>
+</body>
+</html>
