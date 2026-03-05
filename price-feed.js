@@ -30,12 +30,27 @@ const formatCurrency = (value) =>
 
 const hasValidPrice = (value) => Number.isFinite(value) && value > 0;
 
+async function fetchWithTimeout(url, timeoutMs = 10000) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      cache: 'no-store',
+      signal: controller.signal,
+      headers: { Accept: 'application/json' }
+    });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 async function fetchFromSources(sources, label) {
   let lastError;
 
   for (const source of sources) {
     try {
-      const response = await fetch(source.url, { cache: 'no-store' });
+      const response = await fetchWithTimeout(source.url);
       if (!response.ok) {
         throw new Error(`${label} request failed (${response.status}).`);
       }
@@ -76,30 +91,34 @@ export async function loadLivePrices({
     return;
   }
 
-  const renderUnavailable = () => {
-    bitcoinElement.textContent = 'Unavailable';
-    goldElement.textContent = 'Unavailable';
-    if (updatedAtElement) {
-      updatedAtElement.textContent = 'Last updated: unavailable';
-    }
-  };
-
   const refresh = async () => {
-    try {
-      const [bitcoin, gold] = await Promise.all([
-        fetchFromSources(API_SOURCES.bitcoin, 'Bitcoin'),
-        fetchFromSources(API_SOURCES.gold, 'Gold')
-      ]);
+    const [bitcoinResult, goldResult] = await Promise.allSettled([
+      fetchFromSources(API_SOURCES.bitcoin, 'Bitcoin'),
+      fetchFromSources(API_SOURCES.gold, 'Gold')
+    ]);
 
-      updateValue(bitcoinElement, bitcoin);
-      updateValue(goldElement, gold);
+    let successfulUpdates = 0;
 
-      if (updatedAtElement) {
-        updatedAtElement.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
-      }
-    } catch (error) {
-      renderUnavailable();
-      console.error('Unable to load live prices:', error);
+    if (bitcoinResult.status === 'fulfilled') {
+      updateValue(bitcoinElement, bitcoinResult.value);
+      successfulUpdates += 1;
+    } else {
+      bitcoinElement.textContent = 'Unavailable';
+      console.error('Unable to load Bitcoin price:', bitcoinResult.reason);
+    }
+
+    if (goldResult.status === 'fulfilled') {
+      updateValue(goldElement, goldResult.value);
+      successfulUpdates += 1;
+    } else {
+      goldElement.textContent = 'Unavailable';
+      console.error('Unable to load Gold price:', goldResult.reason);
+    }
+
+    if (updatedAtElement) {
+      updatedAtElement.textContent = successfulUpdates > 0
+        ? `Last updated: ${new Date().toLocaleTimeString()}`
+        : 'Last updated: unavailable';
     }
   };
 
