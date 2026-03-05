@@ -106,12 +106,12 @@ main{
 
 <div class="card">
 <h3>Bitcoin</h3>
-<p>1,245</p> //import to pull in live price of bitcoin
+<p id="bitcoin-price">Loading...</p>
 </div>
 
 <div class="card">
 <h3>Gold</h3>
-<p>$12,340</p>  // import to pull in live price of gold
+<p id="gold-price">Loading...</p>
 </div>
 
 <div class="card">
@@ -124,6 +124,15 @@ main{
 </main>
 
 </div>
+
+<script type="module">
+import { loadLivePrices } from './price-feed.js';
+
+loadLivePrices({
+  bitcoinSelector: '#bitcoin-price',
+  goldSelector: '#gold-price'
+});
+</script>
 
 </body>
 </html>
