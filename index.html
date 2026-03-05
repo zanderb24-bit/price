@@ -77,6 +77,22 @@ main{
     border-radius:6px;
 }
 
+.refresh-button{
+    background:orange;
+    color:#121212;
+    border:none;
+    border-radius:4px;
+    padding:8px 14px;
+    font-weight:bold;
+    cursor:pointer;
+    margin:8px 0 16px;
+}
+
+.refresh-button:disabled{
+    opacity:0.6;
+    cursor:not-allowed;
+}
+
 </style>
 </head>
 
@@ -101,17 +117,19 @@ main{
 <main>
 
 <h2>Overview</h2>
+<p id="price-updated-at">Last updated: --</p>
+<button id="refresh-prices" class="refresh-button" type="button">Refresh Prices</button>
 
 <div class="cards">
 
 <div class="card">
 <h3>Bitcoin</h3>
-<p>1,245</p> //import to pull in live price of bitcoin
+<p id="bitcoin-price">Loading...</p>
 </div>
 
 <div class="card">
 <h3>Gold</h3>
-<p>$12,340</p>  // import to pull in live price of gold
+<p id="gold-price">Loading...</p>
 </div>
 
 <div class="card">
@@ -124,6 +142,19 @@ main{
 </main>
 
 </div>
+
+<script type="module">
+import { loadLivePrices } from './price-feed.js';
+
+loadLivePrices({
+  bitcoinSelector: '#bitcoin-price',
+  goldSelector: '#gold-price',
+  updatedAtSelector: '#price-updated-at',
+  refreshButtonSelector: '#refresh-prices',
+  refreshMs: 30000,
+  debug: true
+});
+</script>
 
 </body>
 </html>
